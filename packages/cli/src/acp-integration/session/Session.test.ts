@@ -34628,6 +34628,73 @@ describe('Session', () => {
       });
 
       describe('Stop hook', () => {
+        it('returns max_tokens when the final response is truncated', async () => {
+          mockConfig.getDisableAllHooks = vi.fn().mockReturnValue(true);
+          mockChat.sendMessageStream = vi.fn().mockResolvedValue(
+            createStreamWithChunks([
+              {
+                type: core.StreamEventType.CHUNK,
+                value: {
+                  candidates: [
+                    {
+                      content: { parts: [{ text: 'partial response' }] },
+                      finishReason: 'MAX_TOKENS',
+                    },
+                  ],
+                },
+              },
+            ]),
+          );
+
+          await expect(
+            session.prompt({
+              sessionId: 'test-session-id',
+              prompt: [{ type: 'text', text: 'hello' }],
+            }),
+          ).resolves.toEqual({ stopReason: 'max_tokens' });
+        });
+
+        it('returns end_turn when a later response completes after truncation', async () => {
+          mockConfig.getDisableAllHooks = vi.fn().mockReturnValue(true);
+          mockChat.sendMessageStream = vi.fn().mockResolvedValue(
+            createStreamWithChunks([
+              {
+                type: core.StreamEventType.CHUNK,
+                value: {
+                  candidates: [
+                    {
+                      content: { parts: [{ text: 'partial response' }] },
+                      finishReason: 'MAX_TOKENS',
+                    },
+                  ],
+                },
+              },
+              {
+                type: core.StreamEventType.RETRY,
+                isContinuation: true,
+              },
+              {
+                type: core.StreamEventType.CHUNK,
+                value: {
+                  candidates: [
+                    {
+                      content: { parts: [{ text: 'complete response' }] },
+                      finishReason: 'STOP',
+                    },
+                  ],
+                },
+              },
+            ]),
+          );
+
+          await expect(
+            session.prompt({
+              sessionId: 'test-session-id',
+              prompt: [{ type: 'text', text: 'hello' }],
+            }),
+          ).resolves.toEqual({ stopReason: 'end_turn' });
+        });
+
         it('fires Stop hook after model response completes', async () => {
           const messageBus = {
             request: vi.fn().mockResolvedValue({

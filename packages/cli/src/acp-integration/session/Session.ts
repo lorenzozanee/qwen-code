@@ -1599,6 +1599,7 @@ interface AgentResponseCapture {
   turnResult?: {
     finalText: string;
   };
+  lastFinishReason?: string;
   agentOutput: AgentOutputMessageCapture;
 }
 
@@ -6705,6 +6706,10 @@ export class Session implements SessionContext {
                             messageDisplay?.addChunk(part.text);
                           }
                         }
+                        if (candidate.finishReason !== undefined) {
+                          responseCapture.lastFinishReason =
+                            candidate.finishReason;
+                        }
                         responseCapture.agentOutput.observeFinishReason(
                           candidate.finishReason,
                         );
@@ -6728,6 +6733,7 @@ export class Session implements SessionContext {
                         resp.type === StreamEventType.RETRY ||
                         resp.type === StreamEventType.MODEL_FALLBACK
                       ) {
+                        responseCapture.lastFinishReason = undefined;
                         responseCapture.agentOutput.restartAttempt(
                           resp.type === StreamEventType.RETRY &&
                             resp.isContinuation === true,
@@ -7333,7 +7339,12 @@ export class Session implements SessionContext {
       }
 
       if (!externalReason && !guardContinuation) {
-        return { stopReason: 'end_turn' };
+        return {
+          stopReason:
+            responseCapture?.lastFinishReason === 'MAX_TOKENS'
+              ? 'max_tokens'
+              : 'end_turn',
+        };
       }
 
       const continueParts: Part[] = [];
@@ -7859,6 +7870,12 @@ export class Session implements SessionContext {
                 messageDisplay?.addChunk(part.text);
               }
             }
+            if (
+              candidate.finishReason !== undefined &&
+              options.responseCapture
+            ) {
+              options.responseCapture.lastFinishReason = candidate.finishReason;
+            }
             options.responseCapture?.agentOutput.observeFinishReason(
               candidate.finishReason,
             );
@@ -7881,6 +7898,9 @@ export class Session implements SessionContext {
             response.type === StreamEventType.RETRY ||
             response.type === StreamEventType.MODEL_FALLBACK
           ) {
+            if (options.responseCapture) {
+              options.responseCapture.lastFinishReason = undefined;
+            }
             options.responseCapture?.agentOutput.restartAttempt(
               response.type === StreamEventType.RETRY &&
                 response.isContinuation === true,
@@ -10153,6 +10173,10 @@ export class Session implements SessionContext {
                           messageDisplay?.addChunk(part.text);
                         }
                       }
+                      if (candidate.finishReason !== undefined) {
+                        responseCapture.lastFinishReason =
+                          candidate.finishReason;
+                      }
                       responseCapture.agentOutput.observeFinishReason(
                         candidate.finishReason,
                       );
@@ -10176,6 +10200,7 @@ export class Session implements SessionContext {
                       resp.type === StreamEventType.RETRY ||
                       resp.type === StreamEventType.MODEL_FALLBACK
                     ) {
+                      responseCapture.lastFinishReason = undefined;
                       responseCapture.agentOutput.restartAttempt(
                         resp.type === StreamEventType.RETRY &&
                           resp.isContinuation === true,
